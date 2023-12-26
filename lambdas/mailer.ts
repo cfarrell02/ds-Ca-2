@@ -1,15 +1,14 @@
 import { SQSHandler } from "aws-lambda";
-// import AWS from 'aws-sdk';
-import { SES_EMAIL_FROM, SES_EMAIL_TO, SES_REGION } from "../env";
 import {
   SESClient,
   SendEmailCommand,
   SendEmailCommandInput,
 } from "@aws-sdk/client-ses";
+import { SES_EMAIL_FROM, SES_EMAIL_TO, SES_REGION } from "../env";
 
 if (!SES_EMAIL_TO || !SES_EMAIL_FROM || !SES_REGION) {
   throw new Error(
-    "Please add the SES_EMAIL_TO, SES_EMAIL_FROM and SES_REGION environment variables in an env.js file located in the root directory"
+    "Please add the SES_EMAIL_TO, SES_EMAIL_FROM, and SES_REGION environment variables in an env.js file located in the root directory"
   );
 }
 
@@ -19,7 +18,7 @@ type ContactDetails = {
   message: string;
 };
 
-const client = new SESClient({ region: "eu-west-1" });
+const client = new SESClient({ region: SES_REGION });
 
 export const handler: SQSHandler = async (event: any) => {
   console.log("Event ", event);
@@ -32,9 +31,13 @@ export const handler: SQSHandler = async (event: any) => {
       for (const messageRecord of snsMessage.Records) {
         const s3e = messageRecord.s3;
         const srcBucket = s3e.bucket.name;
-        // Object key may have spaces or unicode non-ASCII characters.
         const srcKey = decodeURIComponent(s3e.object.key.replace(/\+/g, " "));
         try {
+          // Check if the uploaded file is an image
+          if (!isImage(srcKey)) {
+            throw new Error("Uploaded file is not an image");
+          }
+
           const { name, email, message }: ContactDetails = {
             name: "The Photo Album",
             email: SES_EMAIL_FROM,
@@ -44,7 +47,10 @@ export const handler: SQSHandler = async (event: any) => {
           await client.send(new SendEmailCommand(params));
         } catch (error: unknown) {
           console.log("ERROR is: ", error);
-          // return;
+          if (error instanceof Error) {
+            const errorMessage = error.message || "Unknown error occurred";
+            await sendRejectionEmail(SES_EMAIL_TO, SES_EMAIL_FROM, errorMessage);
+          }
         }
       }
     }
@@ -62,10 +68,6 @@ function sendEmailParams({ name, email, message }: ContactDetails) {
           Charset: "UTF-8",
           Data: getHtmlContent({ name, email, message }),
         },
-        // Text: {
-        //   Charset: "UTF-8",
-        //   Data: getTextContent({ name, email, message }),
-        // },
       },
       Subject: {
         Charset: "UTF-8",
@@ -92,12 +94,41 @@ function getHtmlContent({ name, email, message }: ContactDetails) {
   `;
 }
 
-function getTextContent({ name, email, message }: ContactDetails) {
-  return `
-    Received an Email. 📬
-    Sent from:
-        👤 ${name}
-        ✉️ ${email}
-    ${message}
-  `;
+async function sendRejectionEmail(
+  toEmail: string,
+  fromEmail: string,
+  errorMessage: string
+) {
+  const rejectionParams: SendEmailCommandInput = {
+    Destination: {
+      ToAddresses: [toEmail],
+    },
+    Message: {
+      Body: {
+        Html: {
+          Charset: "UTF-8",
+          Data: `
+            <html>
+              <body>
+                <h2>Error in Image Upload</h2>
+                <p style="font-size:18px">${errorMessage}</p>
+              </body>
+            </html>
+          `,
+        },
+      },
+      Subject: {
+        Charset: "UTF-8",
+        Data: `Image Upload Error`,
+      },
+    },
+    Source: fromEmail,
+  };
+  await client.send(new SendEmailCommand(rejectionParams));
+}
+
+function isImage(filename: string) {
+  const imageExtensions = [".jpeg", ".png"];
+  const extension = filename.toLowerCase().slice(filename.lastIndexOf("."));
+  return imageExtensions.includes(extension);
 }
