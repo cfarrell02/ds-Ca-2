@@ -8,14 +8,18 @@ import {
   S3Client,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, QueryCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
+
+const ddbDocClient = createDDbDocClient();
 
 const s3 = new S3Client();
 
 export const handler: SQSHandler = async (event) => {
   console.log("Event ", event);
   for (const record of event.Records) {
-    const recordBody = JSON.parse(record.body);
-    console.log('Raw SNS message ',JSON.stringify(recordBody))
+    const recordBody = JSON.parse(JSON.parse(record.body).Message);
+    console.log('Raw SNS message ', JSON.stringify(recordBody))
     if (recordBody.Records) {
       for (const messageRecord of recordBody.Records) {
         const s3e = messageRecord.s3;
@@ -35,7 +39,34 @@ export const handler: SQSHandler = async (event) => {
           throw new Error("Unsupported image type: ${imageType. ");
         }
         // process image upload 
+        // Add the name to the database
+        
+        const insertCommand = new PutCommand({
+          TableName: "Images",
+          Item: {
+            ImageName: srcKey,
+          },
+        });
+
+        const output = await ddbDocClient.send(insertCommand);
+
+        console.log("Output ", output);
+
       }
     }
   }
 };
+
+function createDDbDocClient() {
+  const ddbClient = new DynamoDBClient({ region: process.env.REGION });
+  const marshallOptions = {
+    convertEmptyValues: true,
+    removeUndefinedValues: true,
+    convertClassInstanceToMap: true,
+  };
+  const unmarshallOptions = {
+    wrapNumbers: false,
+  };
+  const translateConfig = { marshallOptions, unmarshallOptions };
+  return DynamoDBDocumentClient.from(ddbClient, translateConfig);
+}
