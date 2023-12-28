@@ -31,15 +31,29 @@ export class EDAAppStack extends cdk.Stack {
       publicReadAccess: false,
     });
 
+
+      //Dead letter queue for rejection emails
+    const rejectionQueue = new sqs.Queue(this, "RejectionMailerDLQ", {
+      queueName: "RejectionMailerDLQ",
+      retentionPeriod: cdk.Duration.minutes(10),
+
+    });
+
     // Creating SQS queue for image processing
     const imageProcessQueue = new sqs.Queue(this, "img-created-queue", {
       receiveMessageWaitTime: cdk.Duration.seconds(10),
+      deadLetterQueue: {
+        queue: rejectionQueue,
+        maxReceiveCount: 5,
+      },
     });
 
     // Creating an SNS topic for new images
     const newImageTopic = new sns.Topic(this, "NewImageTopic", {
       displayName: "New Image topic",
     });
+
+
 
     // Creating Lambda functions for image processing and mailing
     const processImageFn = new lambdanode.NodejsFunction(
@@ -60,6 +74,14 @@ export class EDAAppStack extends cdk.Stack {
       entry: `${__dirname}/../lambdas/confirmationMailer.ts`,
     });
 
+    const rejectionMailerFn = new lambdanode.NodejsFunction(this, "rejection-mailer-function", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(3),
+      entry: `${__dirname}/../lambdas/rejectionMailer.ts`,
+    });
+
+
     // Setting up event triggers and subscriptions
     imagesBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
@@ -71,6 +93,13 @@ export class EDAAppStack extends cdk.Stack {
     newImageTopic.addSubscription(
       new subs.SqsSubscription(imageProcessQueue) // Subscribe imageProcessQueue to the SNS topic
     );
+    
+    rejectionMailerFn.addEventSource(new events.SqsEventSource(rejectionQueue, {
+      batchSize: 5,
+      maxBatchingWindow: cdk.Duration.seconds(10),
+      maxConcurrency: 5
+    }));
+
 
     const newImageEventSource = new events.SqsEventSource(imageProcessQueue, {
       batchSize: 5,
@@ -84,7 +113,21 @@ export class EDAAppStack extends cdk.Stack {
 
     imageTable.grantReadWriteData(processImageFn); //Granting DynamoDB permissions to processImageFn
 
+    rejectionQueue.grantConsumeMessages(rejectionMailerFn); // Granting permissions to rejectionMailerFn to consume messages from rejectionQueue
+
     confirmationMailerFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "ses:SendEmail",
+          "ses:SendRawEmail",
+          "ses:SendTemplatedEmail",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    rejectionMailerFn.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
