@@ -30,11 +30,22 @@ export class EDAAppStack extends cdk.Stack {
       autoDeleteObjects: true,
       publicReadAccess: false,
     });
-  
+
+
+      //Dead letter queue for rejection emails
+    const rejectionQueue = new sqs.Queue(this, "RejectionMailerDLQ", {
+      queueName: "RejectionMailerDLQ",
+      retentionPeriod: cdk.Duration.minutes(10),
+
+    });
 
     // Creating SQS queue for image processing
     const imageProcessQueue = new sqs.Queue(this, "img-created-queue", {
       receiveMessageWaitTime: cdk.Duration.seconds(10),
+      deadLetterQueue: {
+        queue: rejectionQueue,
+        maxReceiveCount: 5,
+      },
     });
 
     // Creating an SNS topic for new images
@@ -42,12 +53,7 @@ export class EDAAppStack extends cdk.Stack {
       displayName: "New Image topic",
     });
 
-      //Dead letter queue for rejection emails
-      const rejectionQueue = new sqs.Queue(this, "RejectionMailerDLQ", {
-        queueName: "RejectionMailerDLQ",
-        retentionPeriod: cdk.Duration.days(14),
 
-      });
 
     // Creating Lambda functions for image processing and mailing
     const processImageFn = new lambdanode.NodejsFunction(
@@ -58,7 +64,6 @@ export class EDAAppStack extends cdk.Stack {
         entry: `${__dirname}/../lambdas/processImage.ts`,
         timeout: cdk.Duration.seconds(15),
         memorySize: 128,
-        deadLetterQueue: rejectionQueue,
       }
     );
 
@@ -88,8 +93,12 @@ export class EDAAppStack extends cdk.Stack {
     newImageTopic.addSubscription(
       new subs.SqsSubscription(imageProcessQueue) // Subscribe imageProcessQueue to the SNS topic
     );
-
-    rejectionQueue.grantConsumeMessages(rejectionMailerFn); // Granting permissions to rejectionMailerFn to consume messages from rejectionQueue
+    
+    rejectionMailerFn.addEventSource(new events.SqsEventSource(rejectionQueue, {
+      batchSize: 5,
+      maxBatchingWindow: cdk.Duration.seconds(10),
+      maxConcurrency: 5
+    }));
 
 
     const newImageEventSource = new events.SqsEventSource(imageProcessQueue, {
@@ -99,12 +108,12 @@ export class EDAAppStack extends cdk.Stack {
 
     processImageFn.addEventSource(newImageEventSource);
 
-  
-
     // Assigning permissions
     imagesBucket.grantRead(processImageFn);
 
     imageTable.grantReadWriteData(processImageFn); //Granting DynamoDB permissions to processImageFn
+
+    rejectionQueue.grantConsumeMessages(rejectionMailerFn); // Granting permissions to rejectionMailerFn to consume messages from rejectionQueue
 
     confirmationMailerFn.addToRolePolicy(
       new iam.PolicyStatement({

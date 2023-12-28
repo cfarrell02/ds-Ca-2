@@ -11,26 +11,31 @@ if (!SES_EMAIL_TO || !SES_EMAIL_FROM || !SES_REGION) {
 const client = new SESClient({ region: SES_REGION });
 
 export const handler: SQSHandler = async (event: any) => {
-  for (const record of event.Records) {
-    const recordBody = JSON.parse(record.body);
-    const snsMessage = JSON.parse(recordBody.Message);
 
-    if (snsMessage.Records) {
-      for (const messageRecord of snsMessage.Records) {
-        const s3e = messageRecord.s3;
-        const srcBucket = s3e.bucket.name;
-        const srcKey = decodeURIComponent(s3e.object.key.replace(/\+/g, " "));
+  console.log("Event ", event);
+
+  for (const record of event.Records) {
+    const recordBody = JSON.parse(JSON.parse(record.body).Message);
+    console.log("Raw SNS message ", JSON.stringify(recordBody));
+    if (recordBody.Records) {
+      for (const messageRecord of recordBody.Records) {
+        const key = messageRecord.s3.object.key;
+        const bucket = messageRecord.s3.bucket.name;
+
 
         // Constructing a rejection message
-        const message = `We cannot process your image: s3://${srcBucket}/${srcKey}`;
+        const message = `The image "${key}" could not be processed in bucket "${bucket}"`;
 
         // Sending a rejection email
         await sendRejectionEmail(message);
 
         console.log("Rejection email sent");
+
       }
     }
   }
+      
+
 };
 
 async function sendRejectionEmail(message: string) {
