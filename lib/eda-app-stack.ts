@@ -53,6 +53,10 @@ export class EDAAppStack extends cdk.Stack {
       displayName: "New Image topic",
     });
 
+    const imageChangeTopic = new sns.Topic(this, "ImageChangeTopic", {
+      displayName: "Image Change topic",
+    });
+
 
 
     // Creating Lambda functions for image processing and mailing
@@ -81,11 +85,30 @@ export class EDAAppStack extends cdk.Stack {
       entry: `${__dirname}/../lambdas/rejectionMailer.ts`,
     });
 
+    const processUpdateFn = new lambdanode.NodejsFunction(this, "process-update-function", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(3),
+      entry: `${__dirname}/../lambdas/processUpdate.ts`,
+    });
+
+    const processDeleteFn = new lambdanode.NodejsFunction(this, "process-delete-function", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(3),
+      entry: `${__dirname}/../lambdas/processDelete.ts`,
+    });
+
 
     // Setting up event triggers and subscriptions
     imagesBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
       new s3n.SnsDestination(newImageTopic)
+    );
+
+    imagesBucket.addEventNotification(
+      s3.EventType.OBJECT_REMOVED,
+      new s3n.SnsDestination(imageChangeTopic)
     );
 
     newImageTopic.addSubscription(new subs.LambdaSubscription(confirmationMailerFn)); // Subscribe confirmationMailerFn to the SNS topic
@@ -108,10 +131,34 @@ export class EDAAppStack extends cdk.Stack {
 
     processImageFn.addEventSource(newImageEventSource);
 
+    // // Filter the change sns topic to only send updates
+    // const imageChangeFilter: sns.SubscriptionFilter = {
+    //   conditions: ["ImageRemoved"],
+    // };
+
+    // const imageChangeEventSource = new events.SnsEventSource(imageChangeTopic, {
+    //   filterPolicy: {imageChangeFilter},
+    // });
+
+    // processUpdateFn.addEventSource(imageChangeEventSource);
+
+    // Filter the change sns topic to only send deletes
+    const imageDeleteFilter: sns.SubscriptionFilter = {
+      conditions: ["ImageUpdated"], // Not sure if this is the right condition, might need to be a variant of this
+    };
+
+    const imageDeleteEventSource = new events.SnsEventSource(imageChangeTopic, {
+      //filterPolicy: {imageDeleteFilter},
+    });
+
+    processDeleteFn.addEventSource(imageDeleteEventSource);
+
     // Assigning permissions
     imagesBucket.grantRead(processImageFn);
 
     imageTable.grantReadWriteData(processImageFn); //Granting DynamoDB permissions to processImageFn
+    imageTable.grantReadWriteData(processUpdateFn); //Granting DynamoDB permissions to processUpdateFn
+    imageTable.grantReadWriteData(processDeleteFn); //Granting DynamoDB permissions to processDeleteFn
 
     rejectionQueue.grantConsumeMessages(rejectionMailerFn); // Granting permissions to rejectionMailerFn to consume messages from rejectionQueue
 
