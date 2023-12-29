@@ -12,13 +12,17 @@ import {
 const ddbDocClient = createDDbDocClient();
 
 export const handler: SNSHandler = async (event: any) => {
-    console.log("Event ", event);
+    console.log("Event ", JSON.stringify(event));
     for (const snsRecord of event.Records) {
         const snsMessage = snsRecord.Sns.Message;
         const messageData = JSON.parse(snsMessage);
         const s3e = messageData.Records[0].s3;
         const srcBucket = s3e.bucket.name;
         const srcKey = decodeURIComponent(s3e.object.key.replace(/\+/g, " "));
+        const eventName = messageData.Records[0].eventName;
+        if (eventName !== "ObjectRemoved:Delete") {
+            return; // Filter out any events that are not delete events
+        }
         
         console.log("s3e ", s3e);
         

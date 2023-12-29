@@ -106,9 +106,10 @@ export class EDAAppStack extends cdk.Stack {
       new s3n.SnsDestination(newImageTopic)
     );
 
+    //Add attributes to the bucket event
     imagesBucket.addEventNotification(
       s3.EventType.OBJECT_REMOVED,
-      new s3n.SnsDestination(imageChangeTopic)
+      new s3n.SnsDestination(imageChangeTopic),
     );
 
     newImageTopic.addSubscription(new subs.LambdaSubscription(confirmationMailerFn)); // Subscribe confirmationMailerFn to the SNS topic
@@ -143,13 +144,25 @@ export class EDAAppStack extends cdk.Stack {
     // processUpdateFn.addEventSource(imageChangeEventSource);
 
     // Filter the change sns topic to only send deletes
-    const imageDeleteFilter: sns.SubscriptionFilter = {
-      conditions: ["ImageUpdated"], // Not sure if this is the right condition, might need to be a variant of this
-    };
 
-    const imageDeleteEventSource = new events.SnsEventSource(imageChangeTopic, {
-      //filterPolicy: {imageDeleteFilter},
-    });
+
+    // const filterPolicy: sns.SubscriptionFilter= {
+    //   'Records': [
+    //     {
+    //       'eventName': sns.SubscriptionFilter.stringFilter({
+    //         allowlist: ['ObjectRemoved:Delete'],
+    //       }),
+    //     },
+    //   ],
+    // };
+    
+    // I cannot figure out how to get a subsciption filter to work with a bucket created event, since it doesnt have any attributes to filter on.
+    const imageDeleteEventSource = new events.SnsEventSource(imageChangeTopic);
+
+    
+    
+    
+    
 
     processDeleteFn.addEventSource(imageDeleteEventSource);
 
