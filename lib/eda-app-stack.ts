@@ -132,31 +132,20 @@ export class EDAAppStack extends cdk.Stack {
 
     processImageFn.addEventSource(newImageEventSource);
 
-    // // Filter the change sns topic to only send updates
-    // const imageChangeFilter: sns.SubscriptionFilter = {
-    //   conditions: ["ImageRemoved"],
-    // };
 
     // const imageChangeEventSource = new events.SnsEventSource(imageChangeTopic, {
-    //   filterPolicy: {imageChangeFilter},
+    //   filterPolicy: {
+    //     'comment_type': sns.SubscriptionFilter.stringFilter({
+    //       allowlist: ['delete']
+    //     })
+    //   }
     // });
 
     // processUpdateFn.addEventSource(imageChangeEventSource);
 
-    // Filter the change sns topic to only send deletes
-
-
-    // const filterPolicy: sns.SubscriptionFilter= {
-    //   'Records': [
-    //     {
-    //       'eventName': sns.SubscriptionFilter.stringFilter({
-    //         allowlist: ['ObjectRemoved:Delete'],
-    //       }),
-    //     },
-    //   ],
-    // };
     
     // I cannot figure out how to get a subsciption filter to work with a bucket created event, since it doesnt have any attributes to filter on.
+    // Filter has been added to the lambda function instead.
     const imageDeleteEventSource = new events.SnsEventSource(imageChangeTopic);
 
     
