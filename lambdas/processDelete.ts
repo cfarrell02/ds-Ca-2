@@ -13,6 +13,13 @@ const ddbDocClient = createDDbDocClient();
 
 export const handler: SNSHandler = async (event: any) => {
     console.log("Event ", JSON.stringify(event));
+
+    if(!event.Records) {
+        console.log("No records found");
+        return;
+    }
+
+
     for (const snsRecord of event.Records) {
         const snsMessage = snsRecord.Sns.Message;
         const messageData = JSON.parse(snsMessage);

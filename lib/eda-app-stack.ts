@@ -133,15 +133,15 @@ export class EDAAppStack extends cdk.Stack {
     processImageFn.addEventSource(newImageEventSource);
 
 
-    // const imageChangeEventSource = new events.SnsEventSource(imageChangeTopic, {
-    //   filterPolicy: {
-    //     'comment_type': sns.SubscriptionFilter.stringFilter({
-    //       allowlist: ['delete']
-    //     })
-    //   }
-    // });
+    const imageChangeEventSource = new events.SnsEventSource(imageChangeTopic, {
+      filterPolicy: {
+        'comment_type': sns.SubscriptionFilter.stringFilter({
+          allowlist: ['Caption']
+        })
+      }
+    });
 
-    // processUpdateFn.addEventSource(imageChangeEventSource);
+    processUpdateFn.addEventSource(imageChangeEventSource);
 
     
     // I cannot figure out how to get a subsciption filter to work with a bucket created event, since it doesnt have any attributes to filter on.
@@ -191,6 +191,9 @@ export class EDAAppStack extends cdk.Stack {
     // Outputting the S3 bucket name
     new cdk.CfnOutput(this, "bucketName", {
       value: imagesBucket.bucketName,
+    });
+    new cdk.CfnOutput(this, "changeTopicARN", {
+      value: imageChangeTopic.topicArn,
     });
   }
 }

@@ -1,20 +1,50 @@
 import { SNSHandler } from "aws-lambda";
-import {
-    GetObjectCommand,
-    PutObjectCommandInput,
-    GetObjectCommandInput,
-    S3Client,
-    PutObjectCommand,
-  } from "@aws-sdk/client-s3";
   import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-  import { DynamoDBDocumentClient, PutCommand, QueryCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
+  import { DynamoDBDocumentClient, UpdateCommand, 
+    QueryCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 
 const ddbDocClient = createDDbDocClient();
 
 export const handler: SNSHandler = async (event: any) => {
-    console.log("Event ", event);
+    console.log("Event ", JSON.stringify(event));
 
-    //TODO update the table with da new info
+    const message = JSON.parse(event.Records[0].Sns.Message);
+    if(!message) {
+        console.log("No message found");
+        return;
+    }
+    console.log("Message ", message);
+    const imageName = message.name;
+    const imageDescription = message.description;
+
+    //Check if the image exists
+    const getCommand = new GetCommand({
+        TableName: "Images",
+        Key: {
+            ImageName: imageName,
+        },
+    });
+    const output = await ddbDocClient.send(getCommand);
+    console.log("Image Get Output ", output);
+    if (!output.Item) {
+        console.log("Image not found");
+        return;
+    }
+
+    //Update the table with the new info
+    const updateCommand = new UpdateCommand({
+        TableName: "Images",
+        Key: {
+            ImageName: imageName,
+        },
+        UpdateExpression: "set ImageDescription = :d",
+        ExpressionAttributeValues: {
+            ":d": imageDescription,
+        },
+    });
+
+    const updateOutput = await ddbDocClient.send(updateCommand);
+    console.log("Update output ", updateOutput);
   
 };
 
