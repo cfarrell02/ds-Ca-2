@@ -56,10 +56,6 @@ export class EDAAppStack extends cdk.Stack {
       displayName: "New Image topic",
     });
 
-    const imageChangeTopic = new sns.Topic(this, "ImageChangeTopic", {
-      displayName: "Image Change topic",
-    });
-
 
 
     // Creating Lambda functions for image processing and mailing
@@ -126,10 +122,10 @@ export class EDAAppStack extends cdk.Stack {
       new s3n.SnsDestination(newImageTopic)
     );
 
-    //Add attributes to the bucket event
+    // //Add attributes to the bucket event
     imagesBucket.addEventNotification(
       s3.EventType.OBJECT_REMOVED,
-      new s3n.SnsDestination(imageChangeTopic),
+      new s3n.SnsDestination(newImageTopic),
     );
 
 
@@ -152,7 +148,7 @@ export class EDAAppStack extends cdk.Stack {
     processImageFn.addEventSource(newImageEventSource);
 
 
-    const imageChangeEventSource = new events.SnsEventSource(imageChangeTopic, {
+    const imageChangeEventSource = new events.SnsEventSource(newImageTopic, {
       filterPolicy: {
         'comment_type': sns.SubscriptionFilter.stringFilter({
           allowlist: ['Caption']
@@ -165,7 +161,7 @@ export class EDAAppStack extends cdk.Stack {
     
     // I cannot figure out how to get a subsciption filter to work with information from the message body. Lambda function does a check on the message body instead.
 
-    const imageDeleteEventSource = new events.SnsEventSource(imageChangeTopic,{
+    const imageDeleteEventSource = new events.SnsEventSource(newImageTopic,{
       // filterPolicy: {
       //   'comment_type': sns.SubscriptionFilter.stringFilter({
       //     denylist: ['Caption']
@@ -215,8 +211,8 @@ export class EDAAppStack extends cdk.Stack {
     new cdk.CfnOutput(this, "bucketName", {
       value: imagesBucket.bucketName,
     });
-    new cdk.CfnOutput(this, "changeTopicARN", {
-      value: imageChangeTopic.topicArn,
+    new cdk.CfnOutput(this, "newImageTopicARN", {
+      value: newImageTopic.topicArn,
     });
   }
 }

@@ -39,6 +39,8 @@ export const handler:DynamoDBStreamHandler =  async (event) => {
         }else if(record.eventName === "REMOVE") {
             message = `The image "${imageName}" was deleted at ${eventTimeStr}`;
             subject = "Image Deleted";
+        }else{
+            return; // We only care about inserts and deletes
         }
         await sendConfirmationEmail(message, subject);
     }

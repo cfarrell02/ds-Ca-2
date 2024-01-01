@@ -10,10 +10,18 @@ export const handler: SQSHandler = async (event) => {
   for (const record of event.Records) {
     const recordBody = JSON.parse(JSON.parse(record.body).Message);
     console.log('Raw SNS message ', JSON.stringify(recordBody))
+
+
     if (recordBody.Records) {
       for (const messageRecord of recordBody.Records) {
         const s3e = messageRecord.s3;
         const srcBucket = s3e.bucket.name;
+
+        const eventName = messageRecord.eventName;
+        if (eventName !== "ObjectCreated:Put") {
+          return; // Filter out any events that are not put events
+        }
+
         // Object key may have spaces or unicode non-ASCII characters.
         const srcKey = decodeURIComponent(s3e.object.key.replace(/\+/g, " "));
         // Infer the image type from the file suffix.
