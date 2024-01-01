@@ -9,7 +9,9 @@ import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
-
+import { StreamViewType } from "aws-cdk-lib/aws-dynamodb";
+import {  DynamoEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
+import { StartingPosition } from "aws-cdk-lib/aws-lambda";
 import { Construct } from "constructs";
 
 export class EDAAppStack extends cdk.Stack {
@@ -22,6 +24,7 @@ export class EDAAppStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       tableName: "Images",
+      stream: StreamViewType.NEW_AND_OLD_IMAGES,
     });
 
     // Creating an S3 bucket to store images
@@ -71,11 +74,18 @@ export class EDAAppStack extends cdk.Stack {
       }
     );
 
-    const confirmationMailerFn = new lambdanode.NodejsFunction(this, "confirmation-mailer-function", {
+    // const confirmationMailerFn = new lambdanode.NodejsFunction(this, "confirmation-mailer-function", {
+    //   runtime: lambda.Runtime.NODEJS_18_X,
+    //   memorySize: 1024,
+    //   timeout: cdk.Duration.seconds(3),
+    //   entry: `${__dirname}/../lambdas/confirmationMailer.ts`,
+    // });
+
+    const addDeleteMailerFn = new lambdanode.NodejsFunction(this, "add-delete-mailer-function", {
       runtime: lambda.Runtime.NODEJS_18_X,
       memorySize: 1024,
       timeout: cdk.Duration.seconds(3),
-      entry: `${__dirname}/../lambdas/confirmationMailer.ts`,
+      entry: `${__dirname}/../lambdas/addDeleteMailer.ts`,
     });
 
     const rejectionMailerFn = new lambdanode.NodejsFunction(this, "rejection-mailer-function", {
@@ -100,6 +110,16 @@ export class EDAAppStack extends cdk.Stack {
     });
 
 
+    // Add deleteAddmailer fn to a dynamoDB EventSource
+
+    const tableEventSource = new DynamoEventSource(imageTable, {
+      startingPosition: StartingPosition.TRIM_HORIZON,
+      batchSize: 5,
+    });
+
+    addDeleteMailerFn.addEventSource(tableEventSource);
+
+
     // Setting up event triggers and subscriptions
     imagesBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
@@ -112,7 +132,6 @@ export class EDAAppStack extends cdk.Stack {
       new s3n.SnsDestination(imageChangeTopic),
     );
 
-    newImageTopic.addSubscription(new subs.LambdaSubscription(confirmationMailerFn)); // Subscribe confirmationMailerFn to the SNS topic
 
     newImageTopic.addSubscription(
       new subs.SqsSubscription(imageProcessQueue) // Subscribe imageProcessQueue to the SNS topic
@@ -168,7 +187,7 @@ export class EDAAppStack extends cdk.Stack {
 
     rejectionQueue.grantConsumeMessages(rejectionMailerFn); // Granting permissions to rejectionMailerFn to consume messages from rejectionQueue
 
-    confirmationMailerFn.addToRolePolicy(
+    addDeleteMailerFn.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
