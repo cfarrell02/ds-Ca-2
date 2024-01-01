@@ -144,12 +144,16 @@ export class EDAAppStack extends cdk.Stack {
     processUpdateFn.addEventSource(imageChangeEventSource);
 
     
-    // I cannot figure out how to get a subsciption filter to work with a bucket created event, since it doesnt have any attributes to filter on.
-    // Filter has been added to the lambda function instead.
-    const imageDeleteEventSource = new events.SnsEventSource(imageChangeTopic);
+    // I cannot figure out how to get a subsciption filter to work with information from the message body. Lambda function does a check on the message body instead.
 
-    
-    
+    const imageDeleteEventSource = new events.SnsEventSource(imageChangeTopic,{
+      // filterPolicy: {
+      //   'comment_type': sns.SubscriptionFilter.stringFilter({
+      //     denylist: ['Caption']
+      //   })
+      // }
+    });
+
     
     
 
