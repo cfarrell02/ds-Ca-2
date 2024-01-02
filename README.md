@@ -2,7 +2,7 @@
 
 __Name:__ Cian Farrell
 
-__YouTube Demo link__ - [The URL of your demonstration of the app.]
+__YouTube Demo link__ - https://youtu.be/-4pQNhGg3T4
 
 
 ### Phase 1.
@@ -12,9 +12,7 @@ __YouTube Demo link__ - [The URL of your demonstration of the app.]
 + Rejection Mailer - Fully implemented.
 + Process Image - Fully implemented
 
-### Phase 2 (if relevant).
-
-
+### Phase 2.
 
 + Confirmation Mailer - Fully implemented.
 + Rejection Mailer - Fully implemented.
@@ -23,9 +21,7 @@ __YouTube Demo link__ - [The URL of your demonstration of the app.]
 + Update Table - Fully implemented.
 + Topic Filtering - Fully implemented.
 
-### Phase 3 (if relevant).
-
-
+### Phase 3.
 
 + Rejection Mailer - Fully implemented.
 + Process Image - Fully implemented
