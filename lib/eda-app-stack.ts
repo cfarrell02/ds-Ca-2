@@ -38,16 +38,16 @@ export class EDAAppStack extends cdk.Stack {
       //Dead letter queue for rejection emails
     const rejectionQueue = new sqs.Queue(this, "RejectionMailerDLQ", {
       queueName: "RejectionMailerDLQ",
-      retentionPeriod: cdk.Duration.minutes(10),
+      retentionPeriod: cdk.Duration.days(14),
 
     });
 
     // Creating SQS queue for image processing
     const imageProcessQueue = new sqs.Queue(this, "img-created-queue", {
-      receiveMessageWaitTime: cdk.Duration.seconds(10),
+      receiveMessageWaitTime: cdk.Duration.seconds(2),
       deadLetterQueue: {
         queue: rejectionQueue,
-        maxReceiveCount: 5,
+        maxReceiveCount: 1,
       },
     });
 
@@ -109,8 +109,14 @@ export class EDAAppStack extends cdk.Stack {
     // Add deleteAddmailer fn to a dynamoDB EventSource
 
     const tableEventSource = new DynamoEventSource(imageTable, {
-      startingPosition: StartingPosition.TRIM_HORIZON,
+      startingPosition: StartingPosition.LATEST,
       batchSize: 5,
+      // filters: [
+      //   lambda.FilterCriteria.filter({
+      //     eventName: lambda.FilterRule.isEqual("INSERT"),
+
+      //     }),     
+      //    ]
     });
 
     addDeleteMailerFn.addEventSource(tableEventSource);
@@ -130,7 +136,7 @@ export class EDAAppStack extends cdk.Stack {
 
 
     newImageTopic.addSubscription(
-      new subs.SqsSubscription(imageProcessQueue) // Subscribe imageProcessQueue to the SNS topic
+      new subs.SqsSubscription(imageProcessQueue), // Subscribe imageProcessQueue to the SNS topic
     );
     
     rejectionMailerFn.addEventSource(new events.SqsEventSource(rejectionQueue, {
@@ -143,6 +149,11 @@ export class EDAAppStack extends cdk.Stack {
     const newImageEventSource = new events.SqsEventSource(imageProcessQueue, {
       batchSize: 5,
       maxBatchingWindow: cdk.Duration.seconds(10),
+      // filters:[
+        // lambda.FilterCriteria.filter({
+        //   eventName:
+        // })
+      // ],
     });
 
     processImageFn.addEventSource(newImageEventSource);
@@ -159,14 +170,16 @@ export class EDAAppStack extends cdk.Stack {
     processUpdateFn.addEventSource(imageChangeEventSource);
 
     
-    // I cannot figure out how to get a subsciption filter to work with information from the message body. Lambda function does a check on the message body instead.
-
     const imageDeleteEventSource = new events.SnsEventSource(newImageTopic,{
-      // filterPolicy: {
-      //   'comment_type': sns.SubscriptionFilter.stringFilter({
-      //     denylist: ['Caption']
-      //   })
-      // }
+      filterPolicyWithMessageBody:{
+          Records: sns.FilterOrPolicy.policy(
+            {
+              eventName: sns.FilterOrPolicy.filter(sns.SubscriptionFilter.stringFilter({
+                matchPrefixes: ['ObjectRemoved']
+              })),
+            }
+          )
+      }
     });
 
     
